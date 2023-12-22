@@ -48,7 +48,7 @@ def get_client_projets(id):
     return make_response(jsonify({"client_id": id, "count": len(data), "projects": data}), 200)
 
 @app.route("/client", methods=["POST"])
-def add_client(id):
+def add_client():
     conn = mysql.connection.cursor()
     info = request.get_json()
     client_name = info['client_name']
@@ -56,8 +56,8 @@ def add_client(id):
     avg_datebillings = info['avg_datebillings']
     projectcount_kpi = info['projectcount_kpi']
 
-    query = f"""INSERT INTO `client_fees`.`clients` (`client_id`, `client_name`, `work_date`, `avg_datebillings`, `projectcount_kpi`) 
-                VALUES ({client_name},{work_date},{avg_datebillings},{projectcount_kpi})"""
+    query = f"""INSERT INTO `client_fees`.`clients` (`client_name`, `work_date`, `avg_datebillings`, `projectcount_kpi`) 
+                VALUES ('{client_name}','{work_date}','{avg_datebillings}','{projectcount_kpi}')"""
     conn.execute(query)
 
     mysql.connection.commit()
@@ -66,6 +66,27 @@ def add_client(id):
     conn.close()
 
     return make_response(jsonify({"message": "Added Successfully", "row_added": rows_added}), 201)
+
+@app.route("/client/<int:id>", methods=["PUT"])
+def update_client(id):
+    conn = mysql.connection.cursor()
+    info = request.get_json()
+    client_name = info['client_name']
+    work_date = info['work_date']
+    avg_datebillings = info['avg_datebillings']
+    projectcount_kpi = info['projectcount_kpi']
+
+    query = f"""UPDATE `client_fees`.`clients` SET `client_name` = '{client_name}', `work_date` = '{work_date}', 
+                `avg_datebillings`= '{avg_datebillings}', `projectcount_kpi`= '{projectcount_kpi}'
+                WHERE client_id = {id}"""
+    conn.execute(query)
+
+    mysql.connection.commit()
+    rows_update = conn.rowcount
+    print(f"Rows UPDATE : {rows_update}")
+    conn.close()
+
+    return make_response(jsonify({"message": "Updated Successfully", "row_updated": rows_update}), 200)
 
 if __name__ == "__main__":
     app.run(debug=True)
