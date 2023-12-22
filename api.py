@@ -1,4 +1,4 @@
-from flask import Flask, make_response, jsonify
+from flask import Flask, make_response, jsonify, request
 from flask_mysqldb import MySQL
 
 app =  Flask(__name__)
@@ -46,6 +46,26 @@ def get_client_projets(id):
     data = data_fetchall(query)
 
     return make_response(jsonify({"client_id": id, "count": len(data), "projects": data}), 200)
+
+@app.route("/client", methods=["POST"])
+def add_client(id):
+    conn = mysql.connection.cursor()
+    info = request.get_json()
+    client_name = info['client_name']
+    work_date = info['work_date']
+    avg_datebillings = info['avg_datebillings']
+    projectcount_kpi = info['projectcount_kpi']
+
+    query = f"""INSERT INTO `client_fees`.`clients` (`client_id`, `client_name`, `work_date`, `avg_datebillings`, `projectcount_kpi`) 
+                VALUES ({client_name},{work_date},{avg_datebillings},{projectcount_kpi})"""
+    conn.execute(query)
+
+    mysql.connection.commit()
+    rows_added = conn.rowcount
+    print(f"Rows ADDED : {rows_added}")
+    conn.close()
+
+    return make_response(jsonify({"message": "Added Successfully", "row_added": rows_added}), 201)
 
 if __name__ == "__main__":
     app.run(debug=True)
