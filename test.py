@@ -17,8 +17,6 @@ class MyAppTests(unittest.TestCase):
         self.assertIn("<label for=\"\">Username:</label>", response.data.decode())
         self.assertIn("<label for=\"\">Password:</label>", response.data.decode())
 
-
-
     def test_login_success(self):
         response = self.app.post("/login", data={"username": "your_username", "password": "12345678"})
         self.assertEqual(response.status_code, 200)
