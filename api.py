@@ -1,7 +1,12 @@
-from flask import Flask, make_response, jsonify, request
+from flask import Flask, make_response, jsonify, request, render_template, session
 from flask_mysqldb import MySQL
+import jwt
+from datetime import datetime, timedelta
+from functools import wraps
 
-app =  Flask(__name__)
+
+
+app = Flask(__name__)
 
 # inlcude database
 app.config['MYSQL_HOST'] = "localhost"
@@ -11,11 +16,43 @@ app.config['MYSQL_DB'] = "client_fees"
 
 app.config['MYSQL_CURSORCLASS'] = "DictCursor"
 
+app.config['SECRET_KEY'] = '66aa4d9cdf2c4469bbf9c89472bcf73b'
+
 mysql = MySQL(app)
 
+def token_required(func):
+    @wraps(func)
+    def decorated(*args, **kwargs):
+        token = request.args.get('token')
+        if not token:
+            return jsonify({'Alert!': 'Token is Missing!'})
+        try:
+            payload = jwt.decode(token, app.config['SECRET_KEY'])
+        except:
+            return jsonify({'Alert!': 'Invalid Token!'})
+        return func(*args, **kwargs)
+    return decorated
+    
 @app.route("/")
 def index():
-    return "<p> Hello World </p>"
+    if not session.get('logged_in'):
+        return render_template('base.html')
+    else:
+        return 'Logged in currently'
+
+@app.route('/login', methods=['POST'])
+def login():
+    if request.form['username'] and request.form['password'] == '12345678':
+        session['logged_in'] = True
+        token = jwt.encode({
+            'user':request.form['username'],
+            'expiration': str(datetime.utcnow() + timedelta(seconds=120))
+        },
+            app.config['SECRET_KEY'])
+        return jsonify({'token': token})
+    
+    else:
+        return make_response('Unable to verify', 403, {'WWW-Authenticate': 'Basic realm: "Authentication Failed!'})
 
 def data_fetchall(sql_query):
     conn = mysql.connection.cursor()
@@ -25,7 +62,9 @@ def data_fetchall(sql_query):
 
     return data
 
+# Get Endpoints ==========================================================================================================
 @app.route("/client", methods=["GET"])
+@token_required
 def get_client():
     query = """SELECT * FROM client_fees.clients;"""
     data = data_fetchall(query)
@@ -33,13 +72,22 @@ def get_client():
     return make_response(jsonify(data), 200)
 
 @app.route("/client/<int:id>", methods=["GET"])
+@token_required
 def get_client_by_id(id):
-    query = f"""SELECT * FROM client_fees.clients where client_id = {id};"""
+    format_type = request.args.get("format", "json")
+    query = f"""SELECT * FROM client_fees.clients WHERE client_id = {id};"""
     data = data_fetchall(query)
 
-    return make_response(jsonify(data), 200)
+    if format_type.lower() == "xml":
+        response = make_response(jsonify(data), 200)
+        response.headers["Content-Type"] = "application/xml"
+        return response
+    else:
+        return make_response(jsonify(data), 200)
+    
 
 @app.route("/client/<int:id>/projects", methods=["GET"])
+@token_required
 def get_client_projets(id):
     query = f"""SELECT projects.project_name, CONCAT(YEAR(project_start_date), " - " ,YEAR(project_end_date)) as project_year FROM clients 
                 INNER JOIN projects on clients.client_id = projects.client_id WHERE clients.client_id = {id};"""
@@ -47,7 +95,19 @@ def get_client_projets(id):
 
     return make_response(jsonify({"client_id": id, "count": len(data), "projects": data}), 200)
 
-@app.route("/client", methods=["POST"])
+# http://127.0.0.1:5000/client/search?criteria=pasamonte
+@app.route("/client/search", methods=["GET"])
+@token_required
+def search_clients():
+    criteria = request.args.get("criteria")
+    query = f"""SELECT * FROM client_fees.clients WHERE client_name LIKE '%{criteria}%';"""
+    data = data_fetchall(query)
+
+    return make_response(jsonify(data), 200)
+
+# Post Endpoint ==========================================================================================================
+@app.route("/client", methods=["POST"]) 
+@token_required
 def add_client():
     conn = mysql.connection.cursor()
     info = request.get_json()
@@ -67,7 +127,9 @@ def add_client():
 
     return make_response(jsonify({"message": "Added Successfully", "row_added": rows_added}), 201)
 
+# Put Endpoint ==========================================================================================================
 @app.route("/client/<int:id>", methods=["PUT"])
+@token_required
 def update_client(id):
     conn = mysql.connection.cursor()
     info = request.get_json()
@@ -88,7 +150,9 @@ def update_client(id):
 
     return make_response(jsonify({"message": "Updated Successfully", "row_updated": rows_update}), 200)
 
+# Delete Endpoint ==========================================================================================================
 @app.route("/client/<int:id>", methods=["DELETE"])
+@token_required
 def delete_client(id):
     conn = mysql.connection.cursor()
     query = f"""DELETE FROM `client_fees`.`clients` WHERE (`client_id` = '{id}');"""
